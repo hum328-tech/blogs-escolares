@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() {return request.auth != null;}
+  function profile() {return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;}
+  function active() {return signed() && profile().active == true;}
+  function teacher() {return active() && profile().role == 'teacher';}
+  function owner(blogId) {return active() && profile().role == 'student' && profile().blogId == blogId;}
+  match /users/{uid} {
+   allow read: if active() && (request.auth.uid == uid || teacher());
+   allow write: if false;
+  }
+  match /blogs/{blogId} {
+   allow read: if active();
+   allow create,update: if teacher();
+   allow delete: if false;
+   match /posts/{week} {
+    allow read: if teacher() || (active() && resource.data.state == 'published') || (owner(blogId) && resource.data.authorUid == request.auth.uid);
+    allow create: if owner(blogId) && request.resource.data.authorUid == request.auth.uid && request.resource.data.week == week && request.resource.data.state in ['draft','published'] && request.resource.data.keys().hasOnly(['week','title','body','state','authorUid','updatedAt','publishedAt']) && request.resource.data.title is string && request.resource.data.body is string && request.resource.data.title.size() <= 200 && request.resource.data.body.size() <= 200000;
+    allow update: if owner(blogId) && resource.data.authorUid == request.auth.uid && resource.data.state == 'draft' && request.resource.data.authorUid == resource.data.authorUid && request.resource.data.week == resource.data.week && request.resource.data.state in ['draft','published'] && request.resource.data.keys().hasOnly(['week','title','body','state','authorUid','updatedAt','publishedAt']) && request.resource.data.title is string && request.resource.data.body is string && request.resource.data.title.size() <= 200 && request.resource.data.body.size() <= 200000;
+    allow delete: if false;
+   }
+  }
+ }
+}
