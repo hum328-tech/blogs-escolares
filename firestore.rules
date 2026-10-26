@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+  function active() { return signed() && profile().active == true; }
+  function teacher() { return active() && profile().role == 'teacher'; }
+  function owner(blogId) { return active() && profile().role == 'student' && profile().blogId == blogId; }
+  function currentWeek() { return get(/databases/$(database)/documents/settings/current).data.activeWeek; }
+  function validPost(week) {
+   return request.resource.data.keys().hasOnly(['week','title','body','state','authorUid','updatedAt','publishedAt'])
+    && request.resource.data.keys().hasAll(['week','title','body','state','authorUid','updatedAt','publishedAt'])
+    && request.resource.data.week == week
+    && week.matches('^[0-9]{4}-W(0[1-9]|[1-4][0-9]|5[0-3])$')
+    && week == currentWeek()
+    && request.resource.data.authorUid == request.auth.uid
+    && request.resource.data.title is string
+    && request.resource.data.body is string
+    && request.resource.data.title.size() <= 200
+    && request.resource.data.body.size() <= 200000
+    && request.resource.data.state in ['draft','published']
+    && request.resource.data.updatedAt == request.time
+    && ((request.resource.data.state == 'draft' && request.resource.data.publishedAt == null)
+     || (request.resource.data.state == 'published' && request.resource.data.publishedAt == request.time));
+  }
+  match /settings/{id} {
+   allow read: if active() && id == 'current';
+   allow write: if false;
+  }
+  match /users/{uid} {
+   allow get: if signed() && (request.auth.uid == uid || teacher());
+   allow list: if teacher();
+   allow write: if false;
+  }
+  match /blogs/{blogId} {
+   allow read: if active();
+   allow create, update: if teacher();
+   allow delete: if false;
+   match /posts/{week} {
+    allow get, list: if teacher() || owner(blogId) || (active() && resource.data.state == 'published');
+    allow create: if owner(blogId) && validPost(week);
+    allow update: if owner(blogId) && resource.data.authorUid == request.auth.uid && resource.data.state == 'draft' && validPost(week);
+    allow delete: if false;
+   }
+  }
+ }
+}
