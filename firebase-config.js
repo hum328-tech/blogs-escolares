@@ -1,6 +1,6 @@
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyAoIStld2c_LX4mqYiVm64U_lrXoTGSF4M",
+  apiKey: "AIzaSyAo1Stld2c_LX4mqYiVm64U_lrXoTGSF4M",
   authDomain: "blogs-escolares.firebaseapp.com",
   projectId: "blogs-escolares",
   storageBucket: "blogs-escolares.firebasestorage.app",
